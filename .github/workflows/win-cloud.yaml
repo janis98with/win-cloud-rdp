@@ -9,24 +9,10 @@ jobs:
     timeout-minutes: 360 
 
     steps:
-    - name: Download and Unzip Standalone Tailscale Package
-      run: |
-        # Download the official stable standalone zip archive for Windows x64
-        Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "tailscale.zip"
-        
-        # Unzip the files cleanly using native PowerShell utility
-        Expand-Archive -Path "tailscale.zip" -DestinationPath "TailscaleFolder"
-        
-        # Locate the extracted subfolder dynamically and save the absolute path
-        $subFolder = (Get-ChildItem -Path "TailscaleFolder" -Directory)[0].FullName
-        echo "TAILSCALE_DIR=$subFolder" >> $env:GITHUB_ENV
-
-    - name: Connect to Tailscale
-      env:
-        TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
-      run: |
-        # Call the executable using the dynamically saved directory path
-        & "${{ env.TAILSCALE_DIR }}\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
+    - name: Connect to Tailscale via Official Action
+      uses: tailscale/github-action@v2
+      with:
+        authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
         
     - name: Enable Windows Remote Desktop (RDP)
       run: |
@@ -40,7 +26,7 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
         
-    - name: Output Tailscale Connection Info
+    - name: Output Connection Info
       run: |
         Write-Host "========================================="
         Write-Host "Tailscale Setup Complete!"
