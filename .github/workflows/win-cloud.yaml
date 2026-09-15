@@ -9,24 +9,18 @@ jobs:
     timeout-minutes: 360 
 
     steps:
-    - name: Download and Extract Standalone Tailscale Zip
+    - name: Download and Install Tailscale via MSI
       run: |
-        # Download the official stable standalone portable zip archive
-        Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "tailscale.tgz"
+        Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "tailscale.msi"
+        # Run msiexec via cmd context to bypass headless hang issues completely
+        cmd /c start /wait msiexec.exe /i tailscale.msi /qn /norestart
         
-        # Extract the tgz package directly using tar (native in Windows Server runners)
-        tar -xvzf tailscale.tgz
-        
-        # Locate the extracted folder dynamically and rename it to a clean path
-        $extractedDir = Get-ChildItem -Directory | Where-Name -Like "tailscale_*" | Select-Object -First 1
-        Rename-Item -Path $extractedDir.FullName -NewName "TailscalePortable"
-
     - name: Connect to Tailscale
       env:
         TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
       run: |
-        # Run Tailscale directly from the portable directory
-        & ".\TailscalePortable\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
+        # Explicit path execution
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
         
     - name: Enable Windows Remote Desktop (RDP)
       run: |
