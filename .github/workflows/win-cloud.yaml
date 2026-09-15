@@ -9,30 +9,24 @@ jobs:
     timeout-minutes: 360 
 
     steps:
-    - name: Clean and Install Tailscale MSI Package
+    - name: Download and Extract Standalone Tailscale Zip
       run: |
-        Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "tailscale.msi"
-        Start-Process msiexec.exe -ArgumentList '/i tailscale.msi /qn /norestart' -Wait
+        # Download the official stable standalone portable zip archive
+        Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "tailscale.tgz"
         
+        # Extract the tgz package directly using tar (native in Windows Server runners)
+        tar -xvzf tailscale.tgz
+        
+        # Locate the extracted folder dynamically and rename it to a clean path
+        $extractedDir = Get-ChildItem -Directory | Where-Name -Like "tailscale_*" | Select-Object -First 1
+        Rename-Item -Path $extractedDir.FullName -NewName "TailscalePortable"
+
     - name: Connect to Tailscale
       env:
         TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
       run: |
-        # Wait for the installer to finish extracting files in the background
-        $exePath = "C:\Program Files\Tailscale\tailscale.exe"
-        $timeout = 60
-        while (!(Test-Path $exePath) -and $timeout -gt 0) {
-            Start-Sleep -Seconds 2
-            $timeout -= 2
-        }
-        
-        if (!(Test-Path $exePath)) {
-            Write-Error "Tailscale installation timed out or failed to extract."
-            exit 1
-        }
-        
-        # Start Tailscale
-        & $exePath up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
+        # Run Tailscale directly from the portable directory
+        & ".\TailscalePortable\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
         
     - name: Enable Windows Remote Desktop (RDP)
       run: |
