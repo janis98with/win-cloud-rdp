@@ -9,10 +9,18 @@ jobs:
     timeout-minutes: 360 
 
     steps:
-    - name: Connect to Tailscale via Official Action
-      uses: tailscale/github-action@v2
-      with:
-        authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+    - name: Install Tailscale via Chocolatey
+      run: |
+        # Use pre-installed choco to deploy tailscale silently
+        choco install tailscale -y
+        
+    - name: Connect to Tailscale
+      env:
+        TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+      run: |
+        # Force a short sleep to ensure the background windows service initiates
+        Start-Sleep -Seconds 5
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
         
     - name: Enable Windows Remote Desktop (RDP)
       run: |
