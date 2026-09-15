@@ -1,18 +1,56 @@
 name: Windows Cloud RDP over Tailscale
 
 on: 
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch: 
 
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360 # 6 hours maximum limit for GitHub runner sessions
+    timeout-minutes: 360 
 
     steps:
     - name: Download and Install Tailscale
       run: |
-        Invoke-WebRequest -Uri https://tailscale.com -OutFile tailscale-setup.exe
-        Start-Process -FilePath .\tailscale-setup.exe -ArgumentList '/qn', '/norestart' -Wait
+        winget install Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
+        
+    - name: Connect to Tailscale
+      env:
+        TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+      run: |
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
+        
+    - name: Enable Windows Remote Desktop (RDP)
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        
+    - name: Set up RDP User Credentials
+      run: |
+        $Password = ConvertTo-SecureString "YourSecurePassword123!" -AsPlainText -Force
+        New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account"
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
+        Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
+        
+    - name: Output Tailscale Connection Info
+      run: |
+        Write-Host "========================================="
+        Write-Host "Tailscale Setup Complete!"
+        Write-Host "Find the IP address of this machine in your Tailscale Admin Console."
+        Write-Host "Username: CloudUser"
+        Write-Host "Password: name: Windows Cloud RDP over Tailscale
+
+on: 
+  workflow_dispatch: 
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360 
+
+    steps:
+    - name: Download and Install Tailscale
+      run: |
+        winget install Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
         
     - name: Connect to Tailscale
       env:
@@ -43,5 +81,10 @@ jobs:
 
     - name: Keep Runner Alive
       run: |
-        # Keeps the execution block running until the 6-hour limit hits or you cancel it manually
+        while ($true) { Start-Sleep -Seconds 60 }
+"
+        Write-Host "========================================="
+
+    - name: Keep Runner Alive
+      run: |
         while ($true) { Start-Sleep -Seconds 60 }
