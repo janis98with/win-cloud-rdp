@@ -1,22 +1,21 @@
 name: Windows Cloud RDP over Ngrok
 
-on: 
-  workflow_dispatch: 
+on:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360 
+    timeout-minutes: 360
 
     steps:
-    - name: Enable Windows Remote Desktop (RDP)
+    - name: Enable Windows Remote Desktop
       run: |
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Optimize Windows Visual Settings for Speed
+    - name: Optimize Visual Settings for Speed
       run: |
-        # Disable Visual Effects & Animations for Performance
         Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "ColorDepth" -Value 2
 
@@ -32,17 +31,11 @@ jobs:
         NGROK_AUTH_TOKEN: ${{ 3JoUs343Kibf4SNLDnkfHDtMpAI_31dWMH8HBXePNMYReY3As }}
       run: |
         choco install ngrok -y
-        & "C:\Program Files\ngrok\ngrok.exe" config add-authtoken $env:NGROK_AUTH_TOKEN
-        
-        # Start TCP tunnel for RDP port 3389 in background
-        Start-Process -FilePath "C:\Program Files\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-        
+        ngrok config add-authtoken $env:NGROK_AUTH_TOKEN
+        Start-Process ngrok -ArgumentList "tcp 3389"
         Start-Sleep -Seconds 7
-        
-        # Fetch the public connection endpoint from Ngrok API
         $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
-        $publicUrl = $response.tunnels[0].public_url.Replace("tcp://", "")
-        
+        $publicUrl = $response.tunnels[0].public_url -replace "tcp://", ""
         Write-Host "========================================="
         Write-Host "RDP CONNECT ADDRESS: $publicUrl"
         Write-Host "Username: CloudUser"
