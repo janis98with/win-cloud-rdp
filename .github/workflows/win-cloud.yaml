@@ -14,11 +14,6 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Optimize Visual Settings for Speed
-      run: |
-        Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "ColorDepth" -Value 2
-
     - name: Set up RDP User Credentials
       run: |
         $Password = ConvertTo-SecureString "NewUser_2700" -AsPlainText -Force
@@ -28,18 +23,4 @@ jobs:
 
     - name: Start Pinggy RDP Tunnel
       run: |
-        # Launch lightweight SSH tunnel forwarding port 3389
-        $process = Start-Process ssh -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R 0:localhost:3389 a.pinggy.io" -NoNewWindow -PassThru
-        
-        Start-Sleep -Seconds 10
-        
-        Write-Host "========================================="
-        Write-Host "RDP Tunnel Active!"
-        Write-Host "Check the logs of this step or Pinggy output above for your connection host:port."
-        Write-Host "Username: CloudUser"
-        Write-Host "Password: NewUser_2700"
-        Write-Host "========================================="
-
-    - name: Keep Runner Alive
-      run: |
-        while ($true) { Start-Sleep -Seconds 60 }
+        ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p 443 -R 0:localhost:3389 a.pinggy.io
