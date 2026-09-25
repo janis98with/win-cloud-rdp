@@ -36,28 +36,20 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser" -ErrorAction SilentlyContinue
 
-    - name: Install and Start Ngrok Tunnel
+    - name: Install and Launch Ngrok Tunnel
       run: |
-        # Fast, reliable package install via pre-installed Choco
         choco install ngrok -y
+        
+        # Refresh PATH environment variable after choco install
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
         # Authenticate Ngrok
         ngrok config add-authtoken ${{ github.event.inputs.NGROK_AUTH_TOKEN }}
 
-        # Launch Ngrok TCP tunnel for RDP port 3389 in background job
-        Start-Job -ScriptBlock { ngrok tcp 3389 }
-        Start-Sleep -Seconds 6
-
-        # Fetch the allocated high-speed endpoint from Ngrok local API
-        $tunnels = (Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels).tunnels
-        $rdpEndpoint = $tunnels[0].public_url -replace 'tcp://', ''
-
-        Write-Host "================= NGROK CONNECTION INFO ================="
-        Write-Host "CONNECT TO: $rdpEndpoint"
+        Write-Host "================= CONNECTION DETAILS ================="
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
-        Write-Host "========================================================="
+        Write-Host "======================================================="
 
-    - name: Keep Runner Alive
-      run: |
-        while ($true) { Start-Sleep -Seconds 60 }
+        # Launch ngrok directly in the foreground to keep runner alive and display host/port directly
+        ngrok tcp 3389
