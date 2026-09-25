@@ -16,19 +16,14 @@ jobs:
 
     - name: Optimize System & RDP Performance Settings
       run: |
-        # Force 16-bit color depth (drastically reduces bandwidth/CPU usage)
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "ColorDepth" -Value 2
-        
-        # Enable RDP compression and prioritize speed
         Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "DoNotAllowMinColorDepth" -Value 0
-        
-        # Disable Visual Effects (animations, smooth fonts, shadows)
         Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -ErrorAction SilentlyContinue
         
-        # Disable heavy background services individually
-        @("WSearch", "SysMain", "wuauserv") | ForEach-Object {
-            Stop-Service -Name $_ -ErrorAction SilentlyContinue
-            Set-Service -Name $_ -StartupType Disabled -ErrorAction SilentlyContinue
+        $services = @("WSearch", "SysMain", "wuauserv")
+        foreach ($service in $services) {
+            Stop-Service -Name $service -ErrorAction SilentlyContinue
+            Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
         }
 
     - name: Set up RDP User Credentials
@@ -43,12 +38,21 @@ jobs:
         Invoke-WebRequest -Uri "https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-pc-windows-msvc.zip" -OutFile "bore.zip"
         Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
 
-        $process = Start-Process powershell -ArgumentList "-Command .\bore.exe local 3389 --to bore.pub > bore.log 2>&1" -PassThru
+        # Run bore in a background PowerShell job
+        Start-Job -ScriptBlock {
+            Set-Location $using:PWD
+            .\bore.exe local 3389 --to bore.pub > bore.log 2>&1
+        }
 
-        Start-Sleep -Seconds 8
+        # Wait for log creation and connection initialization
+        Start-Sleep -Seconds 10
 
         Write-Host "================= BORE CONNECTION INFO ================="
-        Get-Content "bore.log"
+        if (Test-Path "bore.log") {
+            Get-Content "bore.log"
+        } else {
+            Write-Error "Bore log file failed to generate."
+        }
         Write-Host "========================================================"
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
