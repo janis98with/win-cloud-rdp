@@ -1,4 +1,4 @@
-name: High-Speed Windows Cloud Desktop (RustDesk)
+name: Windows Cloud RDP over Bore
 
 on:
   workflow_dispatch:
@@ -9,32 +9,34 @@ jobs:
     timeout-minutes: 360
 
     steps:
+    - name: Enable Windows Remote Desktop
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
     - name: Set up RDP User Credentials
       run: |
         $Password = ConvertTo-SecureString "NewUser_2700" -AsPlainText -Force
         New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account"
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Install and Configure RustDesk
+    - name: Install and Run Bore Tunnel
       run: |
-        # Download RustDesk Portable
-        Invoke-WebRequest -Uri "https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-1.2.3-x86_64.exe" -OutFile "rustdesk.exe"
-        
-        # Set permanent password
-        Start-Process -FilePath ".\rustdesk.exe" -ArgumentList "--password NewUser_2700" -NoNewWindow
-        
-        # Start RustDesk background service
-        Start-Process -FilePath ".\rustdesk.exe" -ArgumentList "--service" -NoNewWindow
-        
-        Start-Sleep -Seconds 5
-        
-        # Get RustDesk ID
-        $rustdeskId = (.\rustdesk.exe --get-id)
-        
-        Write-Host "========================================="
-        Write-Host "RUSTDESK ID: $rustdeskId"
-        Write-Host "PASSWORD: NewUser_2700"
-        Write-Host "========================================="
+        # Download lightweight bore binary
+        Invoke-WebRequest -Uri "https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-pc-windows-msvc.zip" -OutFile "bore.zip"
+        Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
+
+        # Start forwarding RDP port 3389 to public bore server
+        $process = Start-Process powershell -ArgumentList "-Command .\bore.exe local 3389 --to bore.pub > bore.log 2>&1" -PassThru
+
+        Start-Sleep -Seconds 8
+
+        Write-Host "================= BORE CONNECTION INFO ================="
+        Get-Content "bore.log"
+        Write-Host "========================================================"
+        Write-Host "Username: CloudUser"
+        Write-Host "Password: NewUser_2700"
 
     - name: Keep Runner Alive
       run: |
