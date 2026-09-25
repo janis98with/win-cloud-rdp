@@ -1,40 +1,5 @@
-name: Windows Cloud RDP over Cloudflare (High-Speed)
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 360
-
-    steps:
-    - name: Enable Windows RDP
+- name: Install and Start Cloudflare Tunnel
       run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-NetFirewallRule -Name "RemoteDesktop-UserMode-In-TCP" -Enabled True -Profile Any
-        Set-Service -Name "TermService" -StartupType Automatic
-        Start-Service -Name "TermService" -ErrorAction SilentlyContinue
-
-    - name: Optimize System Performance
-      run: |
-        $services = @("WSearch", "SysMain", "wuauserv")
-        foreach ($service in $services) {
-            Stop-Service -Name $service -ErrorAction SilentlyContinue
-            Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
-        }
-
-    - name: Set up RDP User Credentials
-      run: |
-        $Password = ConvertTo-SecureString "NewUser_2700" -AsPlainText -Force
-        New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account" -ErrorAction SilentlyContinue
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser" -ErrorAction SilentlyContinue
-        Add-LocalGroupMember -Group "Administrators" -Member "CloudUser" -ErrorAction SilentlyContinue
-
-    - name: Install and Start Cloudflare Tunnel
-      run: |
-        # Download Cloudflare CLI
         Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "cloudflared.exe"
 
         Write-Host "================= CONNECTION DETAILS ================="
@@ -42,5 +7,5 @@ jobs:
         Write-Host "Password: NewUser_2700"
         Write-Host "======================================================="
 
-        # Launch quick tunnel mapping local RDP (3389)
-        .\cloudflared.exe tunnel --url rdp://localhost:3389
+        # Forward raw TCP traffic for RDP
+        .\cloudflared.exe tunnel --url tcp://localhost:3389
