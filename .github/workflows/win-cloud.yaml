@@ -26,18 +26,40 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Start Ngrok Tunnel
-      uses: ngrok/ngrok-action@v2
-      with:
-        authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
-        port: '3389'
-        proto: 'tcp'
-
-    - name: Print Connection Info
+    - name: Download, Authenticate and Run Ngrok
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
+        # Download standalone zip directly from Ngrok binaries
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bDf3nnXM1yu/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
+
+        # Authenticate ngrok.exe
+        .\ngrok.exe config add-authtoken $env:NGROK_AUTH_TOKEN
+
+        # Start ngrok TCP tunnel for RDP (port 3389)
+        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389"
+
+        # Poll local endpoint until tunnel active
+        $publicUrl = ""
+        for ($i = 0; $i -lt 15; $i++) {
+            Start-Sleep -Seconds 2
+            try {
+                $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
+                $publicUrl = $response.tunnels[0].public_url -replace "tcp://", ""
+                if ($publicUrl) { break }
+            } catch {
+                Write-Host "Waiting for Ngrok API endpoint..."
+            }
+        }
+
+        if (-not $publicUrl) {
+            Write-Error "Failed to retrieve Ngrok URL. Check NGROK_AUTH_TOKEN secret."
+            exit 1
+        }
+
         Write-Host "========================================="
-        Write-Host "RDP Tunnel is running!"
-        Write-Host "Check the output of the 'Start Ngrok Tunnel' step above to find your public URL (e.g., tcp://x.tcp.ngrok.io:12345)"
+        Write-Host "RDP CONNECT ADDRESS: $publicUrl"
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
         Write-Host "========================================="
