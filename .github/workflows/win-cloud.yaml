@@ -26,19 +26,24 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Download, Authenticate and Run Ngrok
+    - name: Install and Start Ngrok via Winget
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
-        # Download latest stable zip release from Ngrok official static CDN
-        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bDf3nnXM1yu/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-        Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
+        # Install Ngrok using built-in winget package manager
+        winget install --id Ngrok.Ngrok --accept-source-agreements --accept-package-agreements
 
-        # Set authtoken and start tunnel
-        .\ngrok.exe config add-authtoken $env:NGROK_AUTH_TOKEN
-        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389"
+        # Find ngrok executable location
+        $ngrokPath = (Get-Command ngrok.exe -ErrorAction SilentlyContinue).Path
+        if (-not $ngrokPath) {
+            $ngrokPath = "$env:LocalAppData\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe"
+        }
 
-        # Poll internal Ngrok API until public address is live
+        # Configure token and start TCP tunnel on RDP port 3389
+        & $ngrokPath config add-authtoken $env:NGROK_AUTH_TOKEN
+        Start-Process -FilePath $ngrokPath -ArgumentList "tcp 3389"
+
+        # Query local endpoint until live address is reported
         $publicUrl = ""
         for ($i = 0; $i -lt 15; $i++) {
             Start-Sleep -Seconds 2
@@ -47,12 +52,12 @@ jobs:
                 $publicUrl = $response.tunnels[0].public_url -replace "tcp://", ""
                 if ($publicUrl) { break }
             } catch {
-                Write-Host "Waiting for Ngrok API endpoint..."
+                Write-Host "Waiting for Ngrok tunnel..."
             }
         }
 
         if (-not $publicUrl) {
-            Write-Error "Failed to retrieve Ngrok URL. Verify NGROK_AUTH_TOKEN secret in Repository Settings."
+            Write-Error "Failed to retrieve Ngrok URL. Double check your NGROK_AUTH_TOKEN secret in Repository Settings."
             exit 1
         }
 
