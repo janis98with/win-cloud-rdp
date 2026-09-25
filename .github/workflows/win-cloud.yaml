@@ -25,9 +25,11 @@ jobs:
         # Disable Visual Effects (animations, smooth fonts, shadows)
         Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -ErrorAction SilentlyContinue
         
-        # Kill unnecessary heavy background services
-        Stop-Service WSearch, SysMain, WindowsUpdate -ErrorAction SilentlyContinue
-        Set-Service WSearch, SysMain, WindowsUpdate -StartupType Disabled -ErrorAction SilentlyContinue
+        # Disable heavy background services individually
+        @("WSearch", "SysMain", "wuauserv") | ForEach-Object {
+            Stop-Service -Name $_ -ErrorAction SilentlyContinue
+            Set-Service -Name $_ -StartupType Disabled -ErrorAction SilentlyContinue
+        }
 
     - name: Set up RDP User Credentials
       run: |
