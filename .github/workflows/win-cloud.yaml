@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Bore (Working)
+name: Windows Cloud RDP over Bore (Fixed & Stable)
 
 on:
   workflow_dispatch:
@@ -9,11 +9,12 @@ jobs:
     timeout-minutes: 360
 
     steps:
-    - name: Enable Windows Remote Desktop
+    - name: Enable & Restart Windows Remote Desktop
       run: |
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+        Restart-Service -Name TermService -Force
 
     - name: Optimize System Performance
       run: |
@@ -26,20 +27,32 @@ jobs:
     - name: Set up RDP User Credentials
       run: |
         $Password = ConvertTo-SecureString "NewUser_2700" -AsPlainText -Force
-        New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account"
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
-        Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
+        New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account" -ErrorAction SilentlyContinue
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser" -ErrorAction SilentlyContinue
+        Add-LocalGroupMember -Group "Administrators" -Member "CloudUser" -ErrorAction SilentlyContinue
 
-    - name: Install and Run Bore Tunnel (Keep Alive)
+    - name: Install and Launch Bore Tunnel
       run: |
         Invoke-WebRequest -Uri "https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-pc-windows-msvc.zip" -OutFile "bore.zip"
         Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
 
+        # Start bore in a detached process redirected to log
+        Start-Process -FilePath ".\bore.exe" -ArgumentList "local 3389 --to bore.pub" -RedirectStandardOutput "bore.log" -RedirectStandardError "bore_err.log" -NoNewWindow
+
+        # Give bore time to acquire port
+        Start-Sleep -Seconds 5
+
         Write-Host "================= BORE CONNECTION INFO ================="
+        Get-Content "bore.log"
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
-        Write-Host "Connecting to bore.pub..."
         Write-Host "========================================================"
 
-        # Run bore in foreground so the process never dies
-        .\bore.exe local 3389 --to bore.pub
+    - name: Keep Runner Alive & Monitor Tunnel
+      run: |
+        while ($true) {
+            if (Test-Path "bore.log") {
+                Get-Content "bore.log" -Tail 2
+            }
+            Start-Sleep -Seconds 30
+        }
