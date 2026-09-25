@@ -11,14 +11,9 @@ jobs:
     steps:
     - name: Configure and Enable RDP
       run: |
-        # Enable RDP in Registry
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        
-        # Open firewall for RDP across all profiles (Public, Private, Domain)
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-NetFirewallRule -Name "RemoteDesktop-UserMode-In-TCP" -Enabled True -Profile Any
-        
-        # Ensure Terminal Service is running
         Set-Service -Name "TermService" -StartupType Automatic
         Start-Service -Name "TermService" -ErrorAction SilentlyContinue
 
@@ -37,7 +32,7 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser" -ErrorAction SilentlyContinue
 
-    - name: Launch Bore Tunnel (Keep Alive Foreground)
+    - name: Launch Persistent Bore Tunnel
       run: |
         Invoke-WebRequest -Uri "https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-pc-windows-msvc.zip" -OutFile "bore.zip"
         Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
@@ -47,5 +42,8 @@ jobs:
         Write-Host "Password: NewUser_2700"
         Write-Host "======================================================="
 
-        # Run bore in foreground so the step stays active and process never dies
-        .\bore.exe local 3389 --to bore.pub
+        # Loop bore infinitely so if it disconnects or drops, it restarts immediately
+        while ($true) {
+            .\bore.exe local 3389 --to bore.pub
+            Start-Sleep -Seconds 2
+        }
