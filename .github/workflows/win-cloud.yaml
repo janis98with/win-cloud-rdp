@@ -23,22 +23,23 @@ jobs:
 
     - name: Start Pinggy RDP Tunnel
       run: |
-        # Launch SSH tunnel writing logs to a file
-        Start-Process ssh -ArgumentList "-o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p 443 -R 0:localhost:3389 a.pinggy.io" -RedirectStandardOutput "pinggy.log" -RedirectStandardError "pinggy_err.log"
+        # Start SSH and redirect stdout + stderr to pinggy.log
+        $process = Start-Process powershell -ArgumentList "-Command ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p 443 -R 0:localhost:3389 a.pinggy.io *>&1 > pinggy.log" -PassThru
         
-        # Wait for tunnel establishment
-        Start-Sleep -Seconds 8
+        # Give SSH enough time to connect and print the banner
+        Start-Sleep -Seconds 12
 
-        # Extract address from log file
-        $logContent = Get-Content "pinggy.log" -Raw -ErrorAction SilentlyContinue
-        Write-Host "--- PINGGY OUTPUT ---"
-        Write-Host $logContent
-        Write-Host "---------------------"
+        # Dump log contents to step output
+        if (Test-Path "pinggy.log") {
+            Write-Host "================= PINGGY CONNECTION INFO ================="
+            Get-Content "pinggy.log"
+            Write-Host "=========================================================="
+        } else {
+            Write-Error "Log file not created."
+        }
 
-        Write-Host "========================================="
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
-        Write-Host "========================================="
 
     - name: Keep Runner Alive
       run: |
