@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Pinggy
+name: Windows Cloud RDP over Serveo
 
 on:
   workflow_dispatch:
@@ -21,23 +21,16 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Start Pinggy RDP Tunnel
+    - name: Start Serveo RDP Tunnel
       run: |
-        # Start SSH and redirect stdout + stderr to pinggy.log
-        $process = Start-Process powershell -ArgumentList "-Command ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p 443 -R 0:localhost:3389 a.pinggy.io *>&1 > pinggy.log" -PassThru
+        # Launch Serveo SSH Tunnel and save log output
+        $process = Start-Process powershell -ArgumentList "-Command ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 0:localhost:3389 serveo.net > serveo.log 2>&1" -PassThru
         
-        # Give SSH enough time to connect and print the banner
-        Start-Sleep -Seconds 12
+        Start-Sleep -Seconds 10
 
-        # Dump log contents to step output
-        if (Test-Path "pinggy.log") {
-            Write-Host "================= PINGGY CONNECTION INFO ================="
-            Get-Content "pinggy.log"
-            Write-Host "=========================================================="
-        } else {
-            Write-Error "Log file not created."
-        }
-
+        Write-Host "================= SERVEO CONNECTION INFO ================="
+        Get-Content "serveo.log"
+        Write-Host "=========================================================="
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
 
