@@ -30,17 +30,15 @@ jobs:
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
-        # Download standalone zip directly from Ngrok binaries
+        # Download latest stable zip release from Ngrok official static CDN
         Invoke-WebRequest -Uri "https://bin.equinox.io/c/bDf3nnXM1yu/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
         Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
 
-        # Authenticate ngrok.exe
+        # Set authtoken and start tunnel
         .\ngrok.exe config add-authtoken $env:NGROK_AUTH_TOKEN
-
-        # Start ngrok TCP tunnel for RDP (port 3389)
         Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389"
 
-        # Poll local endpoint until tunnel active
+        # Poll internal Ngrok API until public address is live
         $publicUrl = ""
         for ($i = 0; $i -lt 15; $i++) {
             Start-Sleep -Seconds 2
@@ -54,7 +52,7 @@ jobs:
         }
 
         if (-not $publicUrl) {
-            Write-Error "Failed to retrieve Ngrok URL. Check NGROK_AUTH_TOKEN secret."
+            Write-Error "Failed to retrieve Ngrok URL. Verify NGROK_AUTH_TOKEN secret in Repository Settings."
             exit 1
         }
 
