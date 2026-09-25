@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Bore (Working Ultra-Fast)
+name: Windows Cloud RDP over Bore (Working)
 
 on:
   workflow_dispatch:
@@ -11,16 +11,12 @@ jobs:
     steps:
     - name: Enable Windows Remote Desktop
       run: |
-        # Enable RDP and configure firewall
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        
-        # Disable NLA enforcement to allow faster, direct socket handshake
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
 
     - name: Optimize System Performance
       run: |
-        # Stop heavy background processes to free CPU for video encoding
         $services = @("WSearch", "SysMain", "wuauserv")
         foreach ($service in $services) {
             Stop-Service -Name $service -ErrorAction SilentlyContinue
@@ -34,28 +30,16 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Install and Run Bore Tunnel
+    - name: Install and Run Bore Tunnel (Keep Alive)
       run: |
         Invoke-WebRequest -Uri "https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-pc-windows-msvc.zip" -OutFile "bore.zip"
         Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
 
-        Start-Job -ScriptBlock {
-            Set-Location $using:PWD
-            .\bore.exe local 3389 --to bore.pub > bore.log 2>&1
-        }
-
-        Start-Sleep -Seconds 8
-
         Write-Host "================= BORE CONNECTION INFO ================="
-        if (Test-Path "bore.log") {
-            Get-Content "bore.log"
-        } else {
-            Write-Error "Bore log file failed to generate."
-        }
-        Write-Host "========================================================"
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
+        Write-Host "Connecting to bore.pub..."
+        Write-Host "========================================================"
 
-    - name: Keep Runner Alive
-      run: |
-        while ($true) { Start-Sleep -Seconds 60 }
+        # Run bore in foreground so the process never dies
+        .\bore.exe local 3389 --to bore.pub
