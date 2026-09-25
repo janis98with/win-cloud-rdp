@@ -21,13 +21,20 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Connect to Tailscale
-      uses: tailscale/tailscale-action@v2
-      with:
-        authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-
-    - name: Print Connection Details
+    - name: Install and Connect Tailscale
+      env:
+        TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
       run: |
+        # Install Tailscale via winget
+        winget install --id Tailscale.Tailscale --exact --accept-source-agreements --accept-package-agreements
+        
+        # Add Tailscale to PATH for current session
+        $env:Path += ";C:\Program Files\Tailscale"
+        
+        # Connect Tailscale runner node
+        tailscale up --authkey $env:TAILSCALE_AUTHKEY --accept-routes
+
+        # Fetch Tailscale IP
         $ip = (tailscale ip -4)
         Write-Host "========================================="
         Write-Host "TAILSCALE RDP IP: $ip"
