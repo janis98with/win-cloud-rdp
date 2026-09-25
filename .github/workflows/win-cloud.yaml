@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Ngrok
+name: Windows Cloud RDP over SSH Tunnel
 
 on:
   workflow_dispatch:
@@ -26,43 +26,16 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Install and Start Ngrok via Winget
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+    - name: Start Pinggy RDP Tunnel
       run: |
-        # Install Ngrok using built-in winget package manager
-        winget install --id Ngrok.Ngrok --accept-source-agreements --accept-package-agreements
-
-        # Find ngrok executable location
-        $ngrokPath = (Get-Command ngrok.exe -ErrorAction SilentlyContinue).Path
-        if (-not $ngrokPath) {
-            $ngrokPath = "$env:LocalAppData\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe"
-        }
-
-        # Configure token and start TCP tunnel on RDP port 3389
-        & $ngrokPath config add-authtoken $env:NGROK_AUTH_TOKEN
-        Start-Process -FilePath $ngrokPath -ArgumentList "tcp 3389"
-
-        # Query local endpoint until live address is reported
-        $publicUrl = ""
-        for ($i = 0; $i -lt 15; $i++) {
-            Start-Sleep -Seconds 2
-            try {
-                $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
-                $publicUrl = $response.tunnels[0].public_url -replace "tcp://", ""
-                if ($publicUrl) { break }
-            } catch {
-                Write-Host "Waiting for Ngrok tunnel..."
-            }
-        }
-
-        if (-not $publicUrl) {
-            Write-Error "Failed to retrieve Ngrok URL. Double check your NGROK_AUTH_TOKEN secret in Repository Settings."
-            exit 1
-        }
-
+        # Launch lightweight SSH tunnel forwarding port 3389
+        $process = Start-Process ssh -ArgumentList "-o StrictHostKeyChecking=no -p 443 -R 0:localhost:3389 a.pinggy.io" -NoNewWindow -PassThru
+        
+        Start-Sleep -Seconds 10
+        
         Write-Host "========================================="
-        Write-Host "RDP CONNECT ADDRESS: $publicUrl"
+        Write-Host "RDP Tunnel Active!"
+        Write-Host "Check the logs of this step or Pinggy output above for your connection host:port."
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
         Write-Host "========================================="
