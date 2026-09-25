@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Tailscale (Optimized)
+name: High-Speed Windows Cloud Desktop (RustDesk)
 
 on:
   workflow_dispatch:
@@ -9,45 +9,31 @@ jobs:
     timeout-minutes: 360
 
     steps:
-    - name: Enable Windows Remote Desktop
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-    - name: Optimize Windows for Maximum RDP Performance
-      run: |
-        # کاهش عمق رنگ RDP به کمترین حالت (16-bit)
-        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "ColorDepth" -Value 2
-        
-        # غیرفعال کردن Visual Effects و جلوه‌های بصری
-        Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -ErrorAction SilentlyContinue
-        
-        # غیرفعال کردن سرویس Windows Search و SysMain جهت کاهش مصرف CPU
-        Stop-Service WSearch -ErrorAction SilentlyContinue
-        Set-Service WSearch -StartupType Disabled -ErrorAction SilentlyContinue
-        Stop-Service SysMain -ErrorAction SilentlyContinue
-        Set-Service SysMain -StartupType Disabled -ErrorAction SilentlyContinue
-
     - name: Set up RDP User Credentials
       run: |
         $Password = ConvertTo-SecureString "NewUser_2700" -AsPlainText -Force
         New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account"
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Install and Connect Tailscale
-      env:
-        TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+    - name: Install and Configure RustDesk
       run: |
-        winget install --id Tailscale.Tailscale --exact --accept-source-agreements --accept-package-agreements
-        $env:Path += ";C:\Program Files\Tailscale"
-        tailscale up --authkey $env:TAILSCALE_AUTHKEY --accept-routes
-
-        $ip = (tailscale ip -4)
+        # Download RustDesk Portable
+        Invoke-WebRequest -Uri "https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-1.2.3-x86_64.exe" -OutFile "rustdesk.exe"
+        
+        # Set permanent password
+        Start-Process -FilePath ".\rustdesk.exe" -ArgumentList "--password NewUser_2700" -NoNewWindow
+        
+        # Start RustDesk background service
+        Start-Process -FilePath ".\rustdesk.exe" -ArgumentList "--service" -NoNewWindow
+        
+        Start-Sleep -Seconds 5
+        
+        # Get RustDesk ID
+        $rustdeskId = (.\rustdesk.exe --get-id)
+        
         Write-Host "========================================="
-        Write-Host "TAILSCALE RDP IP: $ip"
-        Write-Host "Username: CloudUser"
-        Write-Host "Password: NewUser_2700"
+        Write-Host "RUSTDESK ID: $rustdeskId"
+        Write-Host "PASSWORD: NewUser_2700"
         Write-Host "========================================="
 
     - name: Keep Runner Alive
