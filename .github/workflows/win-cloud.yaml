@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Tailscale
+name: Windows Cloud RDP over Ngrok
 
 on: 
   workflow_dispatch: 
@@ -9,29 +9,16 @@ jobs:
     timeout-minutes: 360 
 
     steps:
-    - name: Install Tailscale via Chocolatey
+    - name: Enable Windows Remote Desktop (RDP)
       run: |
-        choco install tailscale -y
-        
-    - name: Connect to Tailscale
-      env:
-        TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
-      run: |
-        Start-Sleep -Seconds 5
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes --unattended
-        
-    - name: Enable RDP & Optimize Visual Settings
-      run: |
-        # Enable RDP and Firewall Rules
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
+    - name: Optimize Windows Visual Settings for Speed
+      run: |
         # Disable Visual Effects & Animations for Performance
         Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -ErrorAction SilentlyContinue
         Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "ColorDepth" -Value 2
-
-        # Enable UDP for RDP (Reduces input lag significantly)
-        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "fDisableRDPUDP" -Value 0
 
     - name: Set up RDP User Credentials
       run: |
@@ -40,11 +27,24 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Output Connection Info
+    - name: Install and Start Ngrok Tunnel
+      env:
+        NGROK_AUTH_TOKEN: ${{ 3JoUs343Kibf4SNLDnkfHDtMpAI_31dWMH8HBXePNMYReY3As }}
       run: |
+        choco install ngrok -y
+        & "C:\Program Files\ngrok\ngrok.exe" config add-authtoken $env:NGROK_AUTH_TOKEN
+        
+        # Start TCP tunnel for RDP port 3389 in background
+        Start-Process -FilePath "C:\Program Files\ngrok\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+        
+        Start-Sleep -Seconds 7
+        
+        # Fetch the public connection endpoint from Ngrok API
+        $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+        $publicUrl = $response.tunnels[0].public_url.Replace("tcp://", "")
+        
         Write-Host "========================================="
-        Write-Host "Tailscale Setup Complete!"
-        Write-Host "Find the IP address of this machine in your Tailscale Admin Console."
+        Write-Host "RDP CONNECT ADDRESS: $publicUrl"
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
         Write-Host "========================================="
