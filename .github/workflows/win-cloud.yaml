@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Cloudflare
+name: Windows Cloud RDP over Tailscale
 
 on:
   workflow_dispatch:
@@ -32,15 +32,22 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser" -ErrorAction SilentlyContinue
 
-    - name: Install and Start Cloudflare Tunnel
+    - name: Connect to Tailscale Mesh
+      env:
+        TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
       run: |
-        # Download Cloudflare CLI
-        Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "cloudflared.exe"
+        # Download and install Tailscale
+        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe"
+        Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet" -Wait
+
+        # Start Tailscale and join network
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTHKEY --hostname="github-win-runner"
 
         Write-Host "================= CONNECTION DETAILS ================="
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
         Write-Host "======================================================="
 
-        # Launch quick tunnel mapping local RDP TCP port 3389
-        .\cloudflared.exe tunnel --url tcp://localhost:3389
+    - name: Keep Runner Alive
+      run: |
+        while ($true) { Start-Sleep -Seconds 60 }
