@@ -1,4 +1,4 @@
-name: Ultra-Fast Windows Remote (RustDesk + Ngrok)
+name: Ultra-Fast Windows Remote (Ngrok RDP)
 
 on:
   workflow_dispatch:
@@ -13,41 +13,51 @@ jobs:
     timeout-minutes: 360
 
     steps:
+    - name: Enable Windows RDP
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-NetFirewallRule -Name "RemoteDesktop-UserMode-In-TCP" -Enabled True -Profile Any
+        Set-Service -Name "TermService" -StartupType Automatic
+        Start-Service -Name "TermService" -ErrorAction SilentlyContinue
+
+    - name: Optimize System Performance
+      run: |
+        $services = @("WSearch", "SysMain", "wuauserv")
+        foreach ($service in $services) {
+            Stop-Service -Name $service -ErrorAction SilentlyContinue
+            Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
+        }
+
     - name: Set up RDP User Credentials
       run: |
         $Password = ConvertTo-SecureString "NewUser_2700" -AsPlainText -Force
         New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account" -ErrorAction SilentlyContinue
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser" -ErrorAction SilentlyContinue
 
-    - name: Install RustDesk & Ngrok
+    - name: Install and Start Ngrok Tunnel
       run: |
-        # Download RustDesk (Modern low-latency remote desktop)
-        Invoke-WebRequest -Uri "https://github.com/rustdesk/rustdesk/releases/download/1.2.3-1/rustdesk-1.2.3-1-x86_64.exe" -OutFile "rustdesk.exe"
-        
-        # Download Ngrok
-        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyA1xQZYcd/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-        Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
+        # Fast, reliable package install via pre-installed Choco
+        choco install ngrok -y
 
-    - name: Start Services
-      run: |
-        # Configure Ngrok
-        .\ngrok.exe config add-authtoken ${{ github.event.inputs.NGROK_AUTH_TOKEN }}
-        
-        # Launch RustDesk
-        Start-Process .\rustdesk.exe
-        
-        # Start Ngrok Tunnel for TCP RDP (fallback) or direct connection
-        Start-Job -ScriptBlock { .\ngrok.exe tcp 3389 }
-        Start-Sleep -Seconds 5
+        # Authenticate Ngrok
+        ngrok config add-authtoken ${{ github.event.inputs.NGROK_AUTH_TOKEN }}
 
-        # Get public address
-        $log = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
-        Write-Host "======================================================="
-        Write-Host "CONNECT VIA RDP TO: $($log.tunnels[0].public_url -replace 'tcp://', '')"
+        # Launch Ngrok TCP tunnel for RDP port 3389 in background job
+        Start-Job -ScriptBlock { ngrok tcp 3389 }
+        Start-Sleep -Seconds 6
+
+        # Fetch the allocated high-speed endpoint from Ngrok local API
+        $tunnels = (Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels).tunnels
+        $rdpEndpoint = $tunnels[0].public_url -replace 'tcp://', ''
+
+        Write-Host "================= NGROK CONNECTION INFO ================="
+        Write-Host "CONNECT TO: $rdpEndpoint"
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
-        Write-Host "======================================================="
+        Write-Host "========================================================="
 
-    - name: Keep Alive
+    - name: Keep Runner Alive
       run: |
         while ($true) { Start-Sleep -Seconds 60 }
