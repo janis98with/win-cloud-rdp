@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Serveo
+name: Windows Cloud RDP over Tailscale
 
 on:
   workflow_dispatch:
@@ -21,18 +21,19 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Start Serveo RDP Tunnel
-      run: |
-        # Launch Serveo SSH Tunnel and save log output
-        $process = Start-Process powershell -ArgumentList "-Command ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -R 0:localhost:3389 serveo.net > serveo.log 2>&1" -PassThru
-        
-        Start-Sleep -Seconds 10
+    - name: Connect to Tailscale
+      uses: tailscale/tailscale-action@v2
+      with:
+        authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
-        Write-Host "================= SERVEO CONNECTION INFO ================="
-        Get-Content "serveo.log"
-        Write-Host "=========================================================="
+    - name: Print Connection Details
+      run: |
+        $ip = (tailscale ip -4)
+        Write-Host "========================================="
+        Write-Host "TAILSCALE RDP IP: $ip"
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
+        Write-Host "========================================="
 
     - name: Keep Runner Alive
       run: |
