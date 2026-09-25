@@ -23,4 +23,4 @@ jobs:
 
     - name: Start Pinggy RDP Tunnel
       run: |
-        ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p 443 -R 0:localhost:3389 a.pinggy.io
+        ssh -t -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p 443 -R 0:localhost:3389 a.pinggy.io
