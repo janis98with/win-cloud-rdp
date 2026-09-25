@@ -1,11 +1,7 @@
-name: Ultra-Fast Windows Remote (Ngrok RDP)
+name: Windows Cloud RDP over Cloudflare (High-Speed)
 
 on:
   workflow_dispatch:
-    inputs:
-      NGROK_AUTH_TOKEN:
-        description: 'Your free Ngrok Authtoken'
-        required: true
 
 jobs:
   build:
@@ -36,20 +32,15 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser" -ErrorAction SilentlyContinue
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser" -ErrorAction SilentlyContinue
 
-    - name: Install and Launch Ngrok Tunnel
+    - name: Install and Start Cloudflare Tunnel
       run: |
-        choco install ngrok -y
-        
-        # Refresh PATH environment variable after choco install
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-
-        # Authenticate Ngrok
-        ngrok config add-authtoken ${{ github.event.inputs.NGROK_AUTH_TOKEN }}
+        # Download Cloudflare CLI
+        Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "cloudflared.exe"
 
         Write-Host "================= CONNECTION DETAILS ================="
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
         Write-Host "======================================================="
 
-        # Launch ngrok directly in the foreground to keep runner alive and display host/port directly
-        ngrok tcp 3389
+        # Launch quick tunnel mapping local RDP (3389)
+        .\cloudflared.exe tunnel --url rdp://localhost:3389
