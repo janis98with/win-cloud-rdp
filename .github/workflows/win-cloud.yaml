@@ -26,16 +26,24 @@ jobs:
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
-    - name: Install and Start Ngrok Tunnel
+    - name: Download and Start Ngrok Tunnel
       env:
         NGROK_AUTH_TOKEN: ${{ 3JoUs343Kibf4SNLDnkfHDtMpAI_31dWMH8HBXePNMYReY3As }}
       run: |
-        choco install ngrok -y
-        ngrok config add-authtoken $env:NGROK_AUTH_TOKEN
-        Start-Process ngrok -ArgumentList "tcp 3389"
+        # Download and extract official Ngrok Windows binary
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bDf3nnXM1yu/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
+
+        # Authenticate and Start TCP Tunnel for RDP (Port 3389)
+        .\ngrok.exe config add-authtoken $env:NGROK_AUTH_TOKEN
+        Start-Process .\ngrok.exe -ArgumentList "tcp 3389"
+        
         Start-Sleep -Seconds 7
+        
+        # Output the RDP Address from Ngrok API
         $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
         $publicUrl = $response.tunnels[0].public_url -replace "tcp://", ""
+        
         Write-Host "========================================="
         Write-Host "RDP CONNECT ADDRESS: $publicUrl"
         Write-Host "Username: CloudUser"
