@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over SSH Tunnel
+name: Windows Cloud RDP over Pinggy
 
 on:
   workflow_dispatch:
@@ -23,4 +23,23 @@ jobs:
 
     - name: Start Pinggy RDP Tunnel
       run: |
-        ssh -t -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p 443 -R 0:localhost:3389 a.pinggy.io
+        # Launch SSH tunnel writing logs to a file
+        Start-Process ssh -ArgumentList "-o StrictHostKeyChecking=no -o ServerAliveInterval=30 -p 443 -R 0:localhost:3389 a.pinggy.io" -RedirectStandardOutput "pinggy.log" -RedirectStandardError "pinggy_err.log"
+        
+        # Wait for tunnel establishment
+        Start-Sleep -Seconds 8
+
+        # Extract address from log file
+        $logContent = Get-Content "pinggy.log" -Raw -ErrorAction SilentlyContinue
+        Write-Host "--- PINGGY OUTPUT ---"
+        Write-Host $logContent
+        Write-Host "---------------------"
+
+        Write-Host "========================================="
+        Write-Host "Username: CloudUser"
+        Write-Host "Password: NewUser_2700"
+        Write-Host "========================================="
+
+    - name: Keep Runner Alive
+      run: |
+        while ($true) { Start-Sleep -Seconds 60 }
