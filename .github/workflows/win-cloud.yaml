@@ -11,29 +11,35 @@ jobs:
     steps:
     - name: Install Tailscale via Chocolatey
       run: |
-        # Use pre-installed choco to deploy tailscale silently
         choco install tailscale -y
         
     - name: Connect to Tailscale
       env:
         TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
       run: |
-        # Force a short sleep to ensure the background windows service initiates
         Start-Sleep -Seconds 5
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes --netfilter-mode=off
         
-    - name: Enable Windows Remote Desktop (RDP)
+    - name: Enable RDP & Optimize Visual Settings
       run: |
+        # Enable RDP and Firewall Rules
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        
+
+        # Disable Visual Effects & Animations for Performance
+        Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "ColorDepth" -Value 2
+
+        # Enable UDP for RDP (Reduces input lag significantly)
+        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name "fDisableRDPUDP" -Value 0
+
     - name: Set up RDP User Credentials
       run: |
         $Password = ConvertTo-SecureString "NewUser_2700" -AsPlainText -Force
         New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account"
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser"
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
-        
+
     - name: Output Connection Info
       run: |
         Write-Host "========================================="
