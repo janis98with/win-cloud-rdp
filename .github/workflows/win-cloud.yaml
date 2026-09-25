@@ -18,7 +18,7 @@ jobs:
         TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
       run: |
         Start-Sleep -Seconds 5
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes --netfilter-mode=off
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --accept-routes --unattended
         
     - name: Enable RDP & Optimize Visual Settings
       run: |
