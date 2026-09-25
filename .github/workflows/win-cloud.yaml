@@ -27,35 +27,17 @@ jobs:
         Add-LocalGroupMember -Group "Administrators" -Member "CloudUser"
 
     - name: Start Ngrok Tunnel
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      uses: ngrok/ngrok-action@v2
+      with:
+        authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
+        port: '3389'
+        proto: 'tcp'
+
+    - name: Print Connection Info
       run: |
-        choco install ngrok -y
-        ngrok config add-authtoken $env:NGROK_AUTH_TOKEN
-        
-        # Start Ngrok in the background
-        Start-Process ngrok -ArgumentList "tcp 3389"
-        
-        # Retry loop to give Ngrok time to initialize its API
-        $publicUrl = ""
-        for ($i = 0; $i -lt 10; $i++) {
-            Start-Sleep -Seconds 3
-            try {
-                $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
-                $publicUrl = $response.tunnels[0].public_url -replace "tcp://", ""
-                if ($publicUrl) { break }
-            } catch {
-                Write-Host "Waiting for Ngrok API..."
-            }
-        }
-
-        if (-not $publicUrl) {
-            Write-Error "Failed to obtain Ngrok tunnel URL."
-            exit 1
-        }
-
         Write-Host "========================================="
-        Write-Host "RDP CONNECT ADDRESS: $publicUrl"
+        Write-Host "RDP Tunnel is running!"
+        Write-Host "Check the output of the 'Start Ngrok Tunnel' step above to find your public URL (e.g., tcp://x.tcp.ngrok.io:12345)"
         Write-Host "Username: CloudUser"
         Write-Host "Password: NewUser_2700"
         Write-Host "========================================="
