@@ -1,4 +1,4 @@
-name: Windows Cloud RDP over Tailscale
+name: Windows Cloud RDP
 
 on:
   workflow_dispatch:
@@ -6,48 +6,53 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 360
 
     steps:
-    - name: Enable Windows RDP
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-NetFirewallRule -Name "RemoteDesktop-UserMode-In-TCP" -Enabled True -Profile Any
-        Set-Service -Name "TermService" -StartupType Automatic
-        Start-Service -Name "TermService" -ErrorAction SilentlyContinue
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Optimize System Performance
-      run: |
-        $services = @("WSearch", "SysMain", "wuauserv")
-        foreach ($service in $services) {
-            Stop-Service -Name $service -ErrorAction SilentlyContinue
-            Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
-        }
+      - name: Optimize System Performance
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Control Manager\Memory Management' -Name "ClearPageFileAtShutdown" -Value 0
 
-    - name: Set up RDP User Credentials
-      run: |
-        $Password = ConvertTo-SecureString "NewUser_2700" -AsPlainText -Force
-        New-LocalUser "CloudUser" -Password $Password -Description "RDP User Account" -ErrorAction SilentlyContinue
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "CloudUser" -ErrorAction SilentlyContinue
-        Add-LocalGroupMember -Group "Administrators" -Member "CloudUser" -ErrorAction SilentlyContinue
+      - name: Set up RDP User Credentials
+        run: |
+          net user CloudUser NewUser_2700 /add
+          net localgroup administrators CloudUser /add
 
-    - name: Connect to Tailscale Mesh
-      env:
-        TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
-      run: |
-        # Download and install Tailscale
-        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe"
-        Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet" -Wait
+      - name: Enable Windows RDP and Configure Firewall
+        run: |
+          # Disable NLA & Enable TS Connections
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+          
+          # Allow RDP & Ping in Firewall
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          New-NetFirewallRule -DisplayName "Allow RDP Port 3389" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3389 -ErrorAction SilentlyContinue
+          New-NetFirewallRule -DisplayName "Allow ICMP Ping" -Direction Inbound -Action Allow -Protocol ICMPv4 -ErrorAction SilentlyContinue
+          
+          # Start Remote Desktop Service
+          Set-Service -Name "TermService" -StartupType Automatic
+          Start-Service -Name "TermService" -ErrorAction SilentlyContinue
 
-        # Start Tailscale and join network
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTHKEY --hostname="github-win-runner"
+      - name: Connect to Tailscale Mesh
+        shell: powershell
+        run: |
+          # Download and install Tailscale
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe"
+          Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet" -Wait
+          
+          # Start Tailscale service
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes --unattended
+          
+          # Turn off Windows Firewall profiles so Tailscale traffic isn't blocked
+          Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
 
-        Write-Host "================= CONNECTION DETAILS ================="
-        Write-Host "Username: CloudUser"
-        Write-Host "Password: NewUser_2700"
-        Write-Host "======================================================="
+          Write-Host "================== CONNECTION DETAILS =================="
+          Write-Host "Username: CloudUser"
+          Write-Host "Password: NewUser_2700"
+          Write-Host "========================================================"
 
-    - name: Keep Runner Alive
-      run: |
-        while ($true) { Start-Sleep -Seconds 60 }
+      - name: Keep Runner Alive
+        run: |
+          while ($true) { Start-Sleep -Seconds 60 }
