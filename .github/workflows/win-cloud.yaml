@@ -11,10 +11,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Optimize System Performance
-        run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Control Manager\Memory Management' -Name "ClearPageFileAtShutdown" -Value 0
-
       - name: Set up RDP User Credentials
         run: |
           net user CloudUser NewUser_2700 /add
@@ -23,11 +19,11 @@ jobs:
       - name: Enable Windows RDP and Configure Firewall
         run: |
           # Disable NLA & Enable TS Connections
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+          Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -ErrorAction SilentlyContinue
           
           # Allow RDP & Ping in Firewall
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
           New-NetFirewallRule -DisplayName "Allow RDP Port 3389" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3389 -ErrorAction SilentlyContinue
           New-NetFirewallRule -DisplayName "Allow ICMP Ping" -Direction Inbound -Action Allow -Protocol ICMPv4 -ErrorAction SilentlyContinue
           
