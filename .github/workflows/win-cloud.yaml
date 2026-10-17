@@ -1,4 +1,4 @@
-name: Windows Cloud RDP
+name: Windows Cloud RDP (Tailscale Optimized)
 
 on:
   workflow_dispatch:
@@ -16,39 +16,61 @@ jobs:
           net user CloudUser NewUser_2700 /add
           net localgroup administrators CloudUser /add
 
-      - name: Enable Windows RDP and Configure Firewall
+      - name: Enable Windows RDP and Configure System Keeps
+        shell: powershell
         run: |
-          # Disable NLA & Enable TS Connections
+          # 1. Enable RDP & Disable NLA
           Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -ErrorAction SilentlyContinue
           Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -ErrorAction SilentlyContinue
-          
-          # Allow RDP & Ping in Firewall
+
+          # 2. Prevent RDP Disconnection Timeouts & Drops
+          Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "MaxConnectionTime" -Value 0 -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "MaxIdleTime" -Value 0 -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "MaxDisconnectionTime" -Value 0 -ErrorAction SilentlyContinue
+
+          # 3. Apply TCP Keep-Alive Tweaks (Prevents mobile operators/Rightel from killing idle sockets)
+          Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "KeepAliveTime" -Value 15000 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -Name "KeepAliveInterval" -Value 1000 -Type DWord -ErrorAction SilentlyContinue
+
+          # 4. Open Firewall Rules for Local RDP & Ping
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
           New-NetFirewallRule -DisplayName "Allow RDP Port 3389" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3389 -ErrorAction SilentlyContinue
           New-NetFirewallRule -DisplayName "Allow ICMP Ping" -Direction Inbound -Action Allow -Protocol ICMPv4 -ErrorAction SilentlyContinue
-          
-          # Start Remote Desktop Service
+
+          # 5. Disable standard firewall profiles so Tailscale virtual adapters aren't blocked
+          Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+
+          # 6. Start Remote Desktop Service
           Set-Service -Name "TermService" -StartupType Automatic
           Start-Service -Name "TermService" -ErrorAction SilentlyContinue
 
-      - name: Connect to Tailscale Mesh
+      - name: Connect and Optimize Tailscale Mesh
         shell: powershell
         run: |
-          # Download and install Tailscale
+          # 1. Download and install Tailscale
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe"
           Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet" -Wait
-          
-          # Start Tailscale service
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes --unattended
-          
-          # Turn off Windows Firewall profiles so Tailscale traffic isn't blocked
-          Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+
+          # 2. Authenticate and connect with optimized state flags
+          & "C:\Program Files\Tailscale\tailscale.exe" up `
+            --authkey=${{ secrets.TAILSCALE_AUTHKEY }} `
+            --accept-routes `
+            --unattended `
+            --accept-dns=false
+
+          # 3. Wait for mesh connection to finalize
+          Start-Sleep -Seconds 5
+
+          # 4. Get Machine IP Information
+          $TS_IP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
           Write-Host "================== CONNECTION DETAILS =================="
-          Write-Host "Username: CloudUser"
-          Write-Host "Password: NewUser_2700"
+          Write-Host "Tailscale IP: $TS_IP"
+          Write-Host "Username:     CloudUser"
+          Write-Host "Password:     NewUser_2700"
           Write-Host "========================================================"
 
       - name: Keep Runner Alive
+        shell: powershell
         run: |
           while ($true) { Start-Sleep -Seconds 60 }
